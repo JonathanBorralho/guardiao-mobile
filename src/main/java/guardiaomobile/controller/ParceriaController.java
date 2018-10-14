@@ -9,8 +9,9 @@ import br.com.caelum.vraptor.Path;
 import br.com.caelum.vraptor.Resource;
 import br.com.caelum.vraptor.Result;
 import br.com.caelum.vraptor.view.Results;
+import guardiaomobile.enums.Role;
 import guardiaomobile.model.Parceria;
-import guardiaomobile.security.Secured;
+import guardiaomobile.security.annotations.Secured;
 
 @Resource
 @Path("/parcerias")
@@ -22,7 +23,7 @@ public class ParceriaController {
 		this.result = result;
 	}
 
-	@Secured
+	@Secured({Role.ADMIN})
 	@Get("/")
 	public void lista() {
 		List<Parceria> parcerias = new ArrayList<>();

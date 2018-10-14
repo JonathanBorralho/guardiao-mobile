@@ -1,15 +1,12 @@
 package guardiaomobile.security;
 
-import java.io.IOException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.SignatureException;
 import java.util.List;
-import java.util.Map;
 
 import javax.servlet.http.HttpServletRequest;
 
-import com.auth0.jwt.JWTVerifyException;
+import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.auth0.jwt.exceptions.TokenExpiredException;
+import com.auth0.jwt.interfaces.DecodedJWT;
 
 import br.com.caelum.vraptor.InterceptionException;
 import br.com.caelum.vraptor.Intercepts;
@@ -18,8 +15,11 @@ import br.com.caelum.vraptor.core.InterceptorStack;
 import br.com.caelum.vraptor.interceptor.Interceptor;
 import br.com.caelum.vraptor.ioc.RequestScoped;
 import br.com.caelum.vraptor.resource.ResourceMethod;
-import br.com.caelum.vraptor.view.Results;
+import static br.com.caelum.vraptor.view.Results.*;
 import guardiaomobile.enums.Role;
+import guardiaomobile.security.annotations.Secured;
+import guardiaomobile.security.util.ErrorMessage;
+import guardiaomobile.security.util.JwtUtil;
 
 @RequestScoped
 @Intercepts
@@ -35,33 +35,50 @@ public class SecurityTokenInterceptor implements Interceptor {
 
 	@Override
 	public void intercept(InterceptorStack stack, ResourceMethod method, Object resourceInstance) throws InterceptionException {
-		String token = request.getHeader("authorization");
-		Map<String, Object> claims;
+		String token = request.getHeader("Authorization");
 		
 		try {
-			claims = JwtUtil.decode(token);
+			DecodedJWT jwt = JwtUtil.decode(token);
 			
-			@SuppressWarnings("unchecked")
-			List<Role> roles = (List<Role>) claims.get("roles");
-			
-			// TODO: verificar se os Roles extraídos do token contém o papel no parâmetro da anotação no método
-			
-			result.use(Results.http()).addHeader("authorization", token);
+			if (!isAuthorized(jwt, method)) {
+				result.use(http()).setStatusCode(401);
+				result.use(json()).from("não autorizado", "msg").serialize();
+				return;
+			}
 			
 			stack.next(method, resourceInstance);
-			
-		} catch (InvalidKeyException | NoSuchAlgorithmException
-				| IllegalStateException | SignatureException | IOException
-				| JWTVerifyException e) {
-			
-			result.use(Results.http()).setStatusCode(401);
-			result.use(Results.json()).from(e.getMessage(), "msg").serialize();
+		} catch (TokenExpiredException e) {
+			result.use(http()).setStatusCode(401);
+			result.use(json())
+				.from(new ErrorMessage("token expirado", e.getClass().getSimpleName(), 401), "error").serialize();
+		} catch (JWTVerificationException e) {
+			result.use(http()).setStatusCode(401);
+			result.use(json())
+				.from(new ErrorMessage("erro ao verificar assinatura do token", e.getClass().getSimpleName(), 401), "error").serialize();
 		}
+		
 	}
 
 	@Override
 	public boolean accepts(ResourceMethod method) {
 		return method.getMethod().isAnnotationPresent(Secured.class);
+	}
+	
+	private boolean isAuthorized(DecodedJWT jwt, ResourceMethod method) {
+		List<Role> userRoles = jwt.getClaim("roles").asList(Role.class);
+		Secured s = method.getMethod().getAnnotation(Secured.class);
+		
+		Role[] rolesMethod = s.value();
+		return isUserRolesIn(userRoles, rolesMethod);
+	}
+	
+	private boolean isUserRolesIn(List<Role> userRoles, Role[] rolesMethod) {
+		for (int i = 0; i < rolesMethod.length; i++) {
+			if (userRoles.contains(rolesMethod[i])) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 }

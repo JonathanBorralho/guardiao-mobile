@@ -1,14 +1,21 @@
 package guardiaomobile.controller;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import com.auth0.jwt.exceptions.JWTCreationException;
+
 import br.com.caelum.vraptor.Consumes;
 import br.com.caelum.vraptor.Path;
 import br.com.caelum.vraptor.Post;
 import br.com.caelum.vraptor.Resource;
 import br.com.caelum.vraptor.Result;
-import br.com.caelum.vraptor.view.Results;
+import static br.com.caelum.vraptor.view.Results.*;
+import guardiaomobile.enums.Role;
 import guardiaomobile.model.User;
-import guardiaomobile.security.JwtUtil;
-import guardiaomobile.security.Public;
+import guardiaomobile.security.annotations.Public;
+import guardiaomobile.security.util.ErrorMessage;
+import guardiaomobile.security.util.JwtUtil;
 
 @Resource
 @Path("/login")
@@ -27,13 +34,25 @@ public class LoginController {
 		
 		// verifica se usuario e senhas conferem
 		
-		// se sim, cria token jwt e retorna
+		// se sim, cria token jwt
 		
-		// user.setRole("ADMIN");
+		List<Role> roles = new ArrayList<>();
+		roles.add(Role.ADMIN);
 		
-		String token = JwtUtil.createToken(user);
+		user.setNome("Jonathan Sousa Rosendo");
+		user.setRoles(roles);
 		
-		result.use(Results.json()).from(token, "token").serialize();
+		String token = null;
+		
+		try {
+			token = JwtUtil.createToken(user);
+		} catch (JWTCreationException e) {
+			result.use(http()).setStatusCode(500);
+			result.use(json()).from(new ErrorMessage("erro no servidor", e.getClass().getSimpleName(), 401), "error").serialize();
+			return;
+		}
+		
+		result.use(json()).from(token, "token").serialize();
 	}
 	
 }

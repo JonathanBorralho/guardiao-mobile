@@ -1,4 +1,4 @@
-package guardiaomobile.security;
+package guardiaomobile.security.annotations;
 
 import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.ElementType.TYPE;
